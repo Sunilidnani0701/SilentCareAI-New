@@ -45,6 +45,10 @@ print(dir(mp))'''
 
 print(mp.__version__)'''
 
-from mediapipe.tasks.python import vision
+'''from mediapipe.tasks.python import vision
 
-print("Works!")
+print("Works!")'''
+import mediapipe as mp
+
+print(mp.__version__)
+print(hasattr(mp, "solutions"))
