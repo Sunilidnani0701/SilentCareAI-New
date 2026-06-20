@@ -1,0 +1,119 @@
+/* Custom styling for large fonts, clean UI, and hiding technical jargon */
+
+/* Hide Streamlit default menu and footer to look like a standalone app */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* Base fonts and background */
+.stApp {
+    background-color: #f8f9fa;
+    color: #212529;
+    font-family: 'Inter', 'Roboto', sans-serif;
+}
+
+/* Status Card styles */
+.status-card {
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.status-card h2 {
+    margin-top: 0;
+    font-size: 2.5rem;
+    font-weight: 800;
+}
+
+.status-card.safe { background-color: #d4edda; color: #155724; border-left: 8px solid #28a745; }
+.status-card.monitor { background-color: #fff3cd; color: #856404; border-left: 8px solid #ffc107; }
+.status-card.warning { background-color: #ffeeba; color: #856404; border-left: 8px solid #fd7e14; }
+.status-card.emergency { background-color: #f8d7da; color: #721c24; border-left: 8px solid #dc3545; }
+
+/* Alert Panel */
+.alert-panel {
+    background-color: #dc3545;
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: bold;
+    animation: blink 1.5s linear infinite;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Module panels */
+.module-panel {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    height: 100%;
+    border: 1px solid #e9ecef;
+}
+
+.module-panel h3 {
+    margin-top: 0;
+    font-size: 1.4rem;
+    color: #495057;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.data-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 1.15rem;
+}
+
+.data-label {
+    font-weight: 600;
+    color: #6c757d;
+}
+
+.data-value {
+    font-weight: 700;
+}
+
+/* Timeline */
+.timeline-event {
+    margin-bottom: 16px;
+    padding-left: 16px;
+    border-left: 3px solid #3498db;
+    position: relative;
+}
+
+.timeline-event::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 0;
+    width: 11px;
+    height: 11px;
+    background-color: #3498db;
+    border-radius: 50%;
+}
+
+.timeline-time {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.timeline-text {
+    font-size: 1.05rem;
+    color: #2c3e50;
+}
