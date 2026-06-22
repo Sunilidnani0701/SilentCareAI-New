@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+greenlet
+requests
+python-multipart
+SpeechRecognition
+reportlab
+gTTS
+librosa
+soundfile
+openai-whisper
+numpy
+opencv-python-headless
+ultralytics
