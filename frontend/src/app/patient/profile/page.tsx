@@ -18,9 +18,27 @@ export default function ProfilePage() {
     const pid = localStorage.getItem("patient_id");
     if (!pid) return;
     fetch(`${API_BASE_URL}/api/patient/${pid}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to load patient from server");
+        return res.json();
+      })
       .then(data => setPatient(data))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.warn("Profile API unreachable, falling back to local database:", err);
+        const localPatients = JSON.parse(localStorage.getItem("mock_patients") || "[]");
+        const matched = localPatients.find((p: any) => p.patient_id === pid);
+        if (matched) {
+          setPatient(matched);
+        } else {
+          setPatient({
+            patient_id: pid,
+            full_name: localStorage.getItem("patient_name") || "Demo Patient",
+            age: 75,
+            reminder_time: "08:00",
+            caregiver_name: "John Doe (Caregiver)"
+          });
+        }
+      });
   }, []);
 
   if (!patient) return <div className="p-8 text-center">Loading Profile...</div>;

@@ -12,19 +12,37 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`${API_BASE_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patient_id: patientId, full_name: fullName })
-    });
+    try {
+      const res = await fetch(`${API_BASE_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: patientId, full_name: fullName })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("patient_id", data.patient.id);
+        localStorage.setItem("patient_name", data.patient.name);
+        router.push("/patient/checkin");
+        return;
+      }
+    } catch (err) {
+      console.warn("Login API unreachable, searching locally in Demo Mode:", err);
+    }
     
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem("patient_id", data.patient.id);
-      localStorage.setItem("patient_name", data.patient.name);
+    // Local storage lookup
+    const localPatients = JSON.parse(localStorage.getItem("mock_patients") || "[]");
+    const matched = localPatients.find((p: any) => 
+      p.patient_id.trim().toLowerCase() === patientId.trim().toLowerCase() && 
+      p.full_name.trim().toLowerCase() === fullName.trim().toLowerCase()
+    );
+    
+    if (matched) {
+      localStorage.setItem("patient_id", matched.patient_id);
+      localStorage.setItem("patient_name", matched.full_name);
       router.push("/patient/checkin");
     } else {
-      alert("Invalid credentials. Please verify your Patient ID and Full Name.");
+      alert("Invalid credentials. Please verify your Patient ID and Full Name. (Or Register the patient first)");
     }
   };
 

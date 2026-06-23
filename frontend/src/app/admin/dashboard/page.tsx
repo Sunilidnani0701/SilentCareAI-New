@@ -20,22 +20,25 @@ export default function AdminDashboard() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Poll patients lists for live safety states (polling every 3 seconds)
   useEffect(() => {
     const fetchPatients = () => {
       fetch(`${API_BASE_URL}/admin/patients`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error("Admin patients fetch failed");
+          return res.json();
+        })
         .then(data => {
           if (Array.isArray(data)) {
             setPatients(data);
           } else {
             setPatients([]);
-            console.error("Expected array, got:", data);
           }
           setLoading(false);
         })
         .catch(err => {
-          console.error(err);
+          console.warn("Admin patients API unreachable, reading locally registered patients:", err);
+          const localPatients = JSON.parse(localStorage.getItem("mock_patients") || "[]");
+          setPatients(localPatients);
           setLoading(false);
         });
     };

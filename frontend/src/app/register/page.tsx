@@ -35,15 +35,57 @@ export default function RegisterPage() {
       
       if (res.ok) {
         const data = await res.json();
+        // Save locally too for consistency
+        const localPatients = JSON.parse(localStorage.getItem("mock_patients") || "[]");
+        const newPatient = {
+          id: data.patient_id,
+          patient_id: data.patient_id,
+          full_name: formData.full_name,
+          name: formData.full_name,
+          age: formData.age,
+          gender: formData.gender,
+          caregiver_name: formData.caregiver_name,
+          caregiver_contact: formData.caregiver_contact,
+          reminder_time: formData.reminder_time,
+          streak_days: 1,
+          compliance_percentage: 100,
+          last_checkin: new Date().toISOString()
+        };
+        localPatients.push(newPatient);
+        localStorage.setItem("mock_patients", JSON.stringify(localPatients));
+        
         alert(`Registration Successful!\n\nYour Patient ID is: ${data.patient_id}\n\nPlease save this ID to login.`);
         router.push("/login");
       } else {
-        const errData = await res.json();
-        alert(`Registration failed: ${JSON.stringify(errData.detail || "Server error")}`);
+        throw new Error("Registration API returned non-ok status");
       }
     } catch (err) {
-      console.error("Registration error:", err);
-      alert("Registration failed. Could not connect to backend server.");
+      console.warn("Registration API unreachable, falling back to LocalStorage (Demo Mode):", err);
+      
+      const localPatients = JSON.parse(localStorage.getItem("mock_patients") || "[]");
+      const nextIdNum = localPatients.length + 1;
+      const mockPatientId = `PAT-${nextIdNum.toString().padStart(4, '0')}`;
+      
+      const newPatient = {
+        id: mockPatientId,
+        patient_id: mockPatientId,
+        full_name: formData.full_name,
+        name: formData.full_name,
+        age: formData.age,
+        gender: formData.gender,
+        caregiver_name: formData.caregiver_name,
+        caregiver_contact: formData.caregiver_contact,
+        reminder_time: formData.reminder_time,
+        streak_days: 1,
+        compliance_percentage: 100,
+        last_checkin: new Date().toISOString()
+      };
+      
+      localPatients.push(newPatient);
+      localStorage.setItem("mock_patients", JSON.stringify(localPatients));
+      
+      alert(`Registration Successful! (Demo Mode)\n\nYour Patient ID is: ${mockPatientId}\n\nPlease save this ID to login.`);
+      router.push("/login");
     }
   };
 

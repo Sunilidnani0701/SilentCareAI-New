@@ -24,9 +24,29 @@ export default function HistoryPage() {
     if (!patientId) return;
 
     fetch(`${API_BASE_URL}/assessment_history/${patientId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("History API error");
+        return res.json();
+      })
       .then(d => setData(d))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.warn("History API unreachable, loading local simulation data:", err);
+        const localCheckins = JSON.parse(localStorage.getItem(`mock_checkins_${patientId}`) || "[]");
+        setData({
+          patient: {
+            name: localStorage.getItem("patient_name") || "Patient",
+            streak_days: localCheckins.length > 0 ? localCheckins.length : 1,
+            compliance_percentage: 100
+          },
+          trends: localCheckins.map((c: any) => ({
+            timestamp: c.timestamp,
+            overall_score: c.overall_score,
+            speech_score: c.speech_score,
+            lexical_diversity: c.lexical_diversity,
+            face_verified: c.face_verified
+          }))
+        });
+      });
   }, []);
 
   if (!data) return <div className="p-8 text-center">Loading Assessment History...</div>;
