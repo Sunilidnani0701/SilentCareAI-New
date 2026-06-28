@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "28080:8000"
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+      - whisper-cache:/root/.cache/whisper
+    environment:
+      - PORT=8000
+      - RENDER=false
+      - CUDA_VISIBLE_DEVICES=""
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TZ=Asia/Kolkata
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://back.silentcareai.eu.cc
+    ports:
+      - "3070:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=https://back.silentcareai.eu.cc
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  whisper-cache:

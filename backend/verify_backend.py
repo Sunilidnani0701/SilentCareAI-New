@@ -32,130 +32,142 @@ def generate_dummy_wav(filepath, duration=2.0, sample_rate=16000):
 def main():
     print("Starting Database & Backend Verification...")
     
-    # Force drop tables to recreate them with the new columns
-    print("Dropping old tables for schema rebuild...")
-    try:
-        Base.metadata.drop_all(bind=engine)
-    except Exception as e:
-        print(f"Warning dropping tables: {e}")
-        
-    print("Recreating database tables...")
+    print("Ensuring database tables exist...")
     Base.metadata.create_all(bind=engine)
     
     db = SessionLocal()
     
     try:
-        # 2. Insert mock patient
-        print("Registering Patient...")
+        # 2. Insert mock patient if not already present
         patient_id = "PAT-0001"
-        patient = db_models.Patient(
-            patient_id=patient_id,
-            full_name="John Doe",
-            age=72,
-            gender="Male",
-            reminder_time="09:00",
-            caregiver_name="Jane Doe",
-            caregiver_contact="+1234567890",
-            streak_days=1,
-            compliance_percentage=100.0
-        )
-        db.add(patient)
-        db.commit()
-        print(f"Patient registered: {patient.full_name} ({patient.patient_id})")
+        existing_patient = db.query(db_models.Patient).filter(db_models.Patient.patient_id == patient_id).first()
+        if not existing_patient:
+            print("Registering mock Patient...")
+            patient = db_models.Patient(
+                patient_id=patient_id,
+                full_name="John Doe",
+                age=72,
+                gender="Male",
+                reminder_time="09:00",
+                caregiver_name="Jane Doe",
+                caregiver_contact="+1234567890",
+                streak_days=1,
+                compliance_percentage=100.0
+            )
+            db.add(patient)
+            db.commit()
+            print(f"Patient registered: {patient.full_name} ({patient.patient_id})")
+        else:
+            print(f"Patient PAT-0001 already exists: {existing_patient.full_name}")
         
         # 3. Simulate Face Verification with face analysis metrics
         print("Simulating Face Verification with pose metrics...")
-        face_analysis_metrics = {
-            "head_direction": "LOOKING FORWARD",
-            "responsiveness": "RESPONSIVE",
-            "face_detected": True
-        }
-        face_ver = db_models.FaceVerification(
-            id="face-ver-1",
-            patient_id=patient_id,
-            image_path="/uploads/faces/checkin_face_PAT-0001.jpg",
-            verified=True,
-            confidence=0.85,
-            analysis_output=json.dumps(face_analysis_metrics)
-        )
-        db.add(face_ver)
-        db.commit()
-        print(f"Face verification saved: Verified={face_ver.verified}, Confidence={face_ver.confidence}")
-        
-        # 4. Simulate Speech analysis
-        # First generate a dummy WAV file in a temp directory
-        temp_audio = os.path.join(os.path.dirname(__file__), "temp_test.wav")
-        generate_dummy_wav(temp_audio, duration=2.5)
-        
-        # Read the file using librosa to verify duration
-        import librosa
-        y, sr_rate = librosa.load(temp_audio, sr=None)
-        dur = librosa.get_duration(y=y, sr=sr_rate)
-        print(f"Verified Audio Duration: {dur:.2f} seconds")
-        
-        # Clean up dummy WAV
-        if os.path.exists(temp_audio):
-            os.remove(temp_audio)
-            print("Cleaned up temp dummy audio.")
+        face_ver_id = "face-ver-1"
+        existing_fv = db.query(db_models.FaceVerification).filter(db_models.FaceVerification.id == face_ver_id).first()
+        if not existing_fv:
+            face_analysis_metrics = {
+                "head_direction": "LOOKING FORWARD",
+                "responsiveness": "RESPONSIVE",
+                "face_detected": True
+            }
+            face_ver = db_models.FaceVerification(
+                id=face_ver_id,
+                patient_id=patient_id,
+                image_path="/uploads/faces/checkin_face_PAT-0001.jpg",
+                verified=True,
+                confidence=0.85,
+                analysis_output=json.dumps(face_analysis_metrics)
+            )
+            db.add(face_ver)
+            db.commit()
+            print(f"Face verification saved: Verified={face_ver.verified}, Confidence={face_ver.confidence}")
+        else:
+            print(f"Face verification {face_ver_id} already exists.")
             
-        # Mocking Whisper transcription metrics
-        transcript = "I had a wonderful breakfast this morning and basically walked in the garden um like usual."
-        words = transcript.lower().split()
-        total_words = len(words)
-        unique_words = len(set(words))
-        vocabulary_richness = unique_words / total_words
-        
-        # Compute repeated words
-        freq = {}
-        for w in words:
-            freq[w] = freq.get(w, 0) + 1
-        repeated_words = sum(1 for w, count in freq.items() if count > 1)
-        
-        # Filler words
-        filler_list = ["um", "uh", "ah", "er", "hmm", "like", "you know", "actually", "basically"]
-        filler_words = sum(1 for w in words if w in filler_list)
-        
-        speech_metrics = {
-            "total_words": total_words,
-            "unique_words": unique_words,
-            "vocabulary_richness": round(vocabulary_richness, 2),
-            "repeated_words": repeated_words,
-            "filler_words": filler_words,
-            "duration_seconds": 2.5,
-            "speech_rate_wpm": round((total_words / 2.5) * 60, 2),
-            "zero_crossing_rate": 0.08,
-            "slurring_detected": "Low"
-        }
-        
-        assessment = db_models.DailyAssessment(
-            assessment_id="assess-1",
-            patient_id=patient_id,
-            transcript=transcript,
-            speech_metrics=json.dumps(speech_metrics),
-            overall_score=90,
-            speech_score=85,
-            face_verified=True,
-            face_verification_id="face-ver-1",
-            audio_file_path="/uploads/audio/checkin_PAT-0001.wav"
-        )
-        db.add(assessment)
-        
+        # 4. Simulate Speech analysis
+        assess_id = "assess-1"
+        existing_da = db.query(db_models.DailyAssessment).filter(db_models.DailyAssessment.assessment_id == assess_id).first()
+        if not existing_da:
+            # First generate a dummy WAV file in a temp directory
+            temp_audio = os.path.join(os.path.dirname(__file__), "temp_test.wav")
+            generate_dummy_wav(temp_audio, duration=2.5)
+            
+            # Read the file using librosa to verify duration
+            import librosa
+            y, sr_rate = librosa.load(temp_audio, sr=None)
+            dur = librosa.get_duration(y=y, sr=sr_rate)
+            print(f"Verified Audio Duration: {dur:.2f} seconds")
+            
+            # Clean up dummy WAV
+            if os.path.exists(temp_audio):
+                os.remove(temp_audio)
+                print("Cleaned up temp dummy audio.")
+                
+            # Mocking Whisper transcription metrics
+            transcript = "I had a wonderful breakfast this morning and basically walked in the garden um like usual."
+            words = transcript.lower().split()
+            total_words = len(words)
+            unique_words = len(set(words))
+            vocabulary_richness = unique_words / total_words
+            
+            # Compute repeated words
+            freq = {}
+            for w in words:
+                freq[w] = freq.get(w, 0) + 1
+            repeated_words = sum(1 for w, count in freq.items() if count > 1)
+            
+            # Filler words
+            filler_list = ["um", "uh", "ah", "er", "hmm", "like", "you know", "actually", "basically"]
+            filler_words = sum(1 for w in words if w in filler_list)
+            
+            speech_metrics = {
+                "total_words": total_words,
+                "unique_words": unique_words,
+                "vocabulary_richness": round(vocabulary_richness, 2),
+                "repeated_words": repeated_words,
+                "filler_words": filler_words,
+                "duration_seconds": 2.5,
+                "speech_rate_wpm": round((total_words / 2.5) * 60, 2),
+                "zero_crossing_rate": 0.08,
+                "slurring_detected": "Low"
+            }
+            
+            assessment = db_models.DailyAssessment(
+                assessment_id=assess_id,
+                patient_id=patient_id,
+                transcript=transcript,
+                speech_metrics=json.dumps(speech_metrics),
+                overall_score=90,
+                speech_score=85,
+                face_verified=True,
+                face_verification_id="face-ver-1",
+                audio_file_path="/uploads/audio/checkin_PAT-0001.wav"
+            )
+            db.add(assessment)
+            db.commit()
+            print("Speech assessment saved.")
+        else:
+            print(f"Speech assessment {assess_id} already exists.")
+            
         # 4.5 Simulate a Safety Fall Event
-        print("Simulating Safety Fall Event...")
-        fall_event = db_models.SafetyEvent(
-            event_id="fall-1",
-            patient_id=patient_id,
-            event_source="CAMERA",
-            event_type="FALL",
-            snapshot_path="/uploads/faces/checkin_face_PAT-0001.jpg", # reuse test image
-            confidence=0.92,
-            alert_status="DISPATCHED"
-        )
-        db.add(fall_event)
-        
-        db.commit()
-        print("Safety event saved.")
-        print("Speech assessment saved to DailyAssessment table.")
+        fall_id = "fall-1"
+        existing_se = db.query(db_models.SafetyEvent).filter(db_models.SafetyEvent.event_id == fall_id).first()
+        if not existing_se:
+            print("Simulating Safety Fall Event...")
+            fall_event = db_models.SafetyEvent(
+                event_id=fall_id,
+                patient_id=patient_id,
+                event_source="CAMERA",
+                event_type="FALL",
+                snapshot_path="/uploads/faces/checkin_face_PAT-0001.jpg", # reuse test image
+                confidence=0.92,
+                alert_status="DISPATCHED"
+            )
+            db.add(fall_event)
+            db.commit()
+            print("Safety event saved.")
+        else:
+            print(f"Safety event {fall_id} already exists.")
         
         # 5. Verify database structure using queries
         print("\n--- Verifying SQLite Persistence ---")

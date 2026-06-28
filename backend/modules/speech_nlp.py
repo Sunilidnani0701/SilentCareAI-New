@@ -2,7 +2,7 @@
 from core.schemas import SpeechMetrics
 
 def analyze_speech(text: str) -> SpeechMetrics:
-    # TODO: Implement text analysis logic (total words, unique words, etc.)
+    # Implement text analysis logic
     words = text.split()
     total_words = len(words)
     unique_words = len(set(words))

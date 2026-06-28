@@ -49,52 +49,71 @@ export default function HistoryPage() {
       });
   }, []);
 
-  if (!data) return <div className="p-8 text-center">Loading Assessment History...</div>;
+  if (!data) return <div className="p-8 text-center text-slate-500 font-medium">Loading Health History...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-8 text-slate-900">
+      <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+        
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl border border-slate-100 shadow-sm gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">{data.patient.name}'s History</h1>
-            <p className="text-gray-500">View your cognitive and physical assessment records.</p>
+            <h1 className="text-2xl font-extrabold text-slate-900">{data.patient.name}'s Health History</h1>
+            <p className="text-slate-500 text-sm mt-0.5 font-medium">View your cognitive and physical check-in records.</p>
           </div>
-          <Link href="/patient/checkin" className="bg-blue-600 text-white px-4 py-2 rounded font-semibold hover:bg-blue-700">
-            Take Assessment
+          <Link href="/patient/checkin" className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl font-bold text-center text-sm transition shadow-md shadow-blue-500/20 w-full sm:w-auto">
+            Start Today's Check-in
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white p-6 rounded-xl shadow-sm text-center">
-            <div className="text-sm text-gray-500 uppercase tracking-wide">Current Streak</div>
-            <div className="text-4xl font-bold text-blue-600 mt-2">{data.patient.streak_days} Days</div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
+            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Current Streak</span>
+            <div className="text-3xl font-black text-blue-600 mt-2">{data.patient.streak_days} Days</div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm text-center">
-            <div className="text-sm text-gray-500 uppercase tracking-wide">Adherence</div>
-            <div className="text-4xl font-bold text-green-500 mt-2">{data.patient.compliance_percentage}%</div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
+            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Adherence</span>
+            <div className="text-3xl font-black text-green-600 mt-2">{data.patient.compliance_percentage}%</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm">
-          <h2 className="text-xl font-bold mb-4">Assessment Log</h2>
+        {/* History Log */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <h2 className="text-xl font-extrabold text-slate-900">Health Timeline</h2>
           {data.trends.length === 0 ? (
-            <p className="text-gray-500">No assessments completed yet.</p>
+            <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500">
+              No health records yet. Complete today's Daily Check-in to begin tracking your health.
+            </div>
           ) : (
-            <div className="space-y-4">
-              {[...data.trends].reverse().map((t, idx) => (
-                <div key={idx} className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50">
-                  <div>
-                    <div className="font-semibold text-gray-800">{new Date(t.timestamp).toLocaleDateString()}</div>
-                    <div className="text-sm text-gray-500">
-                      Face Verified: {t.face_verified ? "✅" : "❌"} | Lexical TTR: {t.lexical_diversity.toFixed(2)}
+            <div className="relative border-l border-slate-200 ml-3 pl-5 space-y-6">
+              {[...data.trends].reverse().map((t, idx) => {
+                let dotColor = "bg-green-500";
+                if (t.overall_score < 75) dotColor = "bg-red-500 animate-pulse";
+                else if (t.overall_score < 85) dotColor = "bg-amber-500";
+
+                return (
+                  <div key={idx} className="relative animate-fade-in-up">
+                    {/* Timeline dot */}
+                    <span className={`absolute -left-[26px] mt-2.5 w-3 h-3 rounded-full ${dotColor}`} />
+
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center p-4 bg-slate-50/80 border border-slate-100 rounded-xl hover:bg-slate-50 transition gap-4">
+                      <div>
+                        <div className="font-bold text-slate-850 text-base">{new Date(t.timestamp).toLocaleDateString()}</div>
+                        <div className="text-xs text-slate-500 font-medium mt-1">
+                          Face Identity: {t.face_verified ? "Verified ✅" : "Unverified ❌"} | Vocabulary Richness: {(t.lexical_diversity * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 bg-white px-3.5 py-2 rounded-lg border border-slate-100 shadow-sm shrink-0 w-fit">
+                        <div className="text-right">
+                          <div className="text-xl font-black text-blue-900 leading-none">{t.overall_score}</div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Health Score</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-900">{t.overall_score}</div>
-                    <div className="text-xs text-gray-400 uppercase">Overall Score</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

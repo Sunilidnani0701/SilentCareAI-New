@@ -1,6 +1,7 @@
 import os
 import re
 import numpy as np
+import tempfile
 
 # Detect low-memory cloud deployment
 IS_RENDER = os.environ.get("RENDER") == "true"
@@ -41,7 +42,7 @@ def transcribe_and_analyze(audio_path: str) -> tuple[str, dict]:
     
     # 1. Transcribe with Whisper
     try:
-        result = whisper_model.transcribe(audio_path)
+        result = whisper_model.transcribe(audio_path, fp16=False)
         transcript = result.get("text", "").strip()
         print(f"[Whisper STT] Transcript: '{transcript}'")
     except Exception as e:

@@ -9,7 +9,7 @@ def run_face_analysis(img, pose_model) -> dict:
     if pose_model is None or img is None:
         return {"head_direction": "Unknown", "responsiveness": "Unknown", "face_detected": False}
 
-    results = pose_model(img, verbose=False)
+    results = pose_model(img, verbose=False, imgsz=320)
     if len(results[0].keypoints.data) > 0:
         kp = results[0].keypoints.data[0]
         if len(kp) >= 3:

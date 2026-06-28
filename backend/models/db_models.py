@@ -73,3 +73,19 @@ class FaceVerification(Base):
     verified = Column(Boolean, default=False)
     confidence = Column(Float, default=0.0)
     analysis_output = Column(Text, nullable=True) # JSON string of head_direction, responsiveness, etc.
+
+class WearableSensorData(Base):
+    __tablename__ = 'wearable_sensor_data'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    patient_id = Column(String, ForeignKey('patients.patient_id'), nullable=False)
+    timestamp = Column(Integer, nullable=False)
+    acc_x = Column(Float, nullable=False)
+    acc_y = Column(Float, nullable=False)
+    acc_z = Column(Float, nullable=False)
+    gyro_x = Column(Float, nullable=False)
+    gyro_y = Column(Float, nullable=False)
+    gyro_z = Column(Float, nullable=False)
+    battery_level = Column(Integer, nullable=False)
+    fall_detected = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

@@ -9,11 +9,12 @@ def generate_words(count: int = 3) -> List[str]:
     return random.sample(CLINICAL_WORDS, count)
 
 def execute_immediate_recall(assigned_words: List[str], user_input: str) -> Tuple[float, List[str]]:
-    # TODO: Implement proper word matching (e.g. fuzzy matching)
+    # Implement proper word matching (fuzzy matching)
     recalled = []
-    user_words = [w.lower().strip() for w in user_input.split()]
+    user_words = [w.lower().strip(',.') for w in user_input.split()]
     for word in assigned_words:
-        if word.lower() in user_words:
+        w_lower = word.lower()
+        if any(w_lower in uw or uw in w_lower for uw in user_words):
             recalled.append(word)
     
     score = (len(recalled) / len(assigned_words)) * 100 if assigned_words else 0.0

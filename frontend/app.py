@@ -11,7 +11,7 @@ from dashboard import render_dashboard, render_sidebar, calculate_overall_risk
 # --- 1. Page Configuration ---
 # Must be the first Streamlit command in the app
 st.set_page_config(
-    page_title="SilentCare AI Dashboard",
+    page_title="CareMonitor AI Dashboard",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -108,7 +108,7 @@ def get_mock_timeline(mock_data):
 # --- 3. Main Application Flow ---
 def main():
     # Render the Header section
-    st.markdown("<h1 style='text-align: center; color: #2c3e50; font-weight: 800; font-size: 3rem; margin-bottom: 0;'>SILENTCARE AI</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #2c3e50; font-weight: 800; font-size: 3rem; margin-bottom: 0;'>CAREMONITOR AI</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #7f8c8d; margin-top: 5px;'>Early Emergency Detection System</h3>", unsafe_allow_html=True)
     
     # Display Current Timestamp

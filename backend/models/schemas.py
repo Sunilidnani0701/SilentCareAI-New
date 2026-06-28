@@ -47,3 +47,17 @@ class DailyAssessmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class Vector3D(BaseModel):
+    x: float
+    y: float
+    z: float
+
+class WearableTelemetrySubmit(BaseModel):
+    patient_id: str
+    timestamp: int
+    acceleration: Vector3D
+    gyroscope: Vector3D
+    battery: int
+    fall_detected: bool
+

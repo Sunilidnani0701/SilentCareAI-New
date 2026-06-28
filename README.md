@@ -1,4 +1,4 @@
-# SilentCare AI 🚀
+# CareMonitor AI 🚀
 ### AI-Powered Early Emergency Detection & Response System
 
 SilentCare AI is an intelligent ambient assisted living and safety monitoring platform designed for elderly care. The system integrates real-time computer vision (YOLOv8 Pose tracking), advanced speech phenotyping (Whisper-based slurring & cognitive diagnostics), wearable IoT fallback integration, and a unified medical monitoring dashboard.

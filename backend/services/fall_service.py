@@ -1,9 +1,44 @@
 import os
 import shutil
 import uuid
-from datetime import datetime
+import time
+import requests
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import models.db_models as db_models
+
+def send_telegram_notification(message: str, image_path: str = None):
+    """
+    Sends a Telegram notification to the caregiver/user when a safety event occurs.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    
+    if not token or not chat_id:
+        print("Telegram Bot config missing. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in environment.")
+        return False
+        
+    try:
+        if image_path and os.path.exists(image_path):
+            url = f"https://api.telegram.org/bot{token}/sendPhoto"
+            with open(image_path, "rb") as photo:
+                files = {"photo": photo}
+                data = {"chat_id": chat_id, "caption": message, "parse_mode": "HTML"}
+                response = requests.post(url, data=data, files=files, timeout=10)
+        else:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+            response = requests.post(url, data=data, timeout=10)
+            
+        if response.status_code == 200:
+            print("Telegram notification sent successfully.")
+            return True
+        else:
+            print(f"Failed to send Telegram notification: {response.text}")
+            return False
+    except Exception as e:
+        print(f"Error sending Telegram notification: {str(e)}")
+        return False
 
 def handle_vision_alert(payload: dict, db: Session, upload_dir: str) -> dict:
     """
@@ -47,10 +82,24 @@ def handle_vision_alert(payload: dict, db: Session, upload_dir: str) -> dict:
         snapshot_path=db_snapshot_path,
         confidence=confidence,
         alert_status="DISPATCHED"
-    )
+      )
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
+    
+    # Notify caregiver via Telegram
+    patient_name = patient.full_name if patient else "Patient"
+    alert_msg = (
+        "🚨 <b>EMERGENCY ALERT</b> 🚨\n\n"
+        "⚠️ <b>Fall Detected!</b>\n"
+        f"👤 <b>Patient:</b> {patient_name} ({patient_id})\n"
+        f"🎯 <b>Confidence:</b> {confidence * 100:.0f}%\n"
+        f"📅 <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (IST)\n\n"
+        "🔴 Please check the Safety Monitoring live feed immediately."
+    )
+    
+    full_snapshot_path = dest_path if db_snapshot_path else None
+    send_telegram_notification(alert_msg, full_snapshot_path)
     
     return {
         "event_id": event_id,
@@ -59,3 +108,4 @@ def handle_vision_alert(payload: dict, db: Session, upload_dir: str) -> dict:
         "snapshot_path": db_snapshot_path,
         "status": "DISPATCHED"
     }
+

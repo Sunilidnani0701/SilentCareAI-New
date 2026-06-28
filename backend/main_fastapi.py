@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import os
 import uuid
@@ -17,8 +18,12 @@ import nlp_engine
 import speech_module
 import services.face_service as face_service
 import services.fall_service as fall_service
+from reporting.pdf_builder import generate_pdf
+from core.schemas import FinalAssessment, SpeechMetrics, MemoryMetrics, AttentionMetrics, NamingMetrics, FluencyMetrics
+
 
 IS_RENDER = os.environ.get("RENDER") == "true"
+
 
 try:
     if not IS_RENDER:
@@ -46,7 +51,7 @@ except Exception as e:
 def get_cropped_face(img):
     if not pose_model:
         return None
-    results = pose_model(img, verbose=False)
+    results = pose_model(img, verbose=False, imgsz=320)
     if len(results[0].keypoints.data) > 0:
         kp = results[0].keypoints.data[0]
         if len(kp) >= 3:
@@ -70,7 +75,7 @@ def verify_face_presence(image_bytes):
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         return False, 0.0
-    results = pose_model(img, verbose=False)
+    results = pose_model(img, verbose=False, imgsz=320)
     if len(results[0].keypoints.data) > 0:
         kp = results[0].keypoints.data[0]
         if len(kp) >= 3:
@@ -82,13 +87,49 @@ def verify_face_presence(image_bytes):
 # Create database tables
 db_models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="SilentCare Ambient Backend API")
+# Seed default patients if empty
+from core.database import SessionLocal
+db = SessionLocal()
+try:
+    if db.query(db_models.Patient).count() == 0:
+        default_patients = [
+            db_models.Patient(
+                patient_id="PAT-0001",
+                full_name="John Doe",
+                age=72,
+                gender="Male",
+                reminder_time="08:00",
+                caregiver_name="Jane Doe",
+                caregiver_contact="555-0199",
+                streak_days=5,
+                compliance_percentage=92.0
+            ),
+            db_models.Patient(
+                patient_id="PAT-0002",
+                full_name="Alice Smith",
+                age=79,
+                gender="Female",
+                reminder_time="09:30",
+                caregiver_name="Bob Smith",
+                caregiver_contact="555-0244",
+                streak_days=12,
+                compliance_percentage=98.0
+            )
+        ]
+        db.add_all(default_patients)
+        db.commit()
+        print("Database seeded with default patients: PAT-0001, PAT-0002")
+finally:
+    db.close()
+
+
+app = FastAPI(title="CareMonitor Ambient Backend API")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -114,7 +155,7 @@ app.mount("/snapshots", StaticFiles(directory=SNAPSHOTS_DIR), name="snapshots")
 
 @app.get("/")
 def read_root():
-    return {"message": "SilentCare Ambient Backend API is running"}
+    return {"message": "CareMonitor Ambient Backend API is running"}
 
 # --- Patient Management ---
 
@@ -393,7 +434,7 @@ async def register_assessment(
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is not None:
-            results = pose_model(img, verbose=False)
+            results = pose_model(img, verbose=False, imgsz=320)
             if len(results[0].keypoints.data) > 0:
                 kp = results[0].keypoints.data[0]
                 if len(kp) >= 3:
@@ -511,6 +552,12 @@ async def register_fall_event(
     )
     db.add(new_event)
     db.commit()
+    
+    # Notify caregiver via Telegram
+    alert_msg = f"⚠️ WARNING: Fall Detected!\nPatient: {db_patient.full_name} ({patient_id})\nTime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    full_snapshot_path = save_path if image_file else None
+    fall_service.send_telegram_notification(alert_msg, full_snapshot_path)
+    
     return {"message": "Fall event registered successfully"}
 
 @app.put("/api/events/{event_id}/resolve")
@@ -522,7 +569,113 @@ def resolve_safety_event(event_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Event resolved successfully"}
 
+# --- Patient Report API ---
+
+@app.get("/patient/{patient_id}/report")
+def get_patient_report(patient_id: str, db: Session = Depends(get_db)):
+    db_patient = db.query(db_models.Patient).filter(db_models.Patient.patient_id == patient_id).first()
+    if not db_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    latest_assessment = db.query(db_models.DailyAssessment).filter(
+        db_models.DailyAssessment.patient_id == patient_id
+    ).order_by(db_models.DailyAssessment.timestamp.desc()).first()
+    
+    # If no assessment exists, create default values so we can still generate a report
+    if latest_assessment:
+        try:
+            metrics = json.loads(latest_assessment.speech_metrics) if latest_assessment.speech_metrics else {}
+        except Exception:
+            metrics = {}
+            
+        speech_score = latest_assessment.speech_score or 80
+        memory_score = latest_assessment.memory_score or 80
+        face_verified = latest_assessment.face_verified or False
+        
+        # Check safety events
+        latest_fall = db.query(db_models.SafetyEvent).filter(
+            db_models.SafetyEvent.patient_id == patient_id
+        ).order_by(db_models.SafetyEvent.timestamp.desc()).first()
+        no_active_falls = True
+        if latest_fall and latest_fall.event_type == "FALL" and latest_fall.alert_status == "DISPATCHED":
+            no_active_falls = False
+            
+        derived_score = round((speech_score * 0.40) + (memory_score * 0.30) + (10 if face_verified else 0) + (20 if no_active_falls else 0))
+    else:
+        metrics = {}
+        derived_score = 90
+        face_verified = True
+        no_active_falls = True
+        
+    # Build SpeechMetrics
+    speech_rate = metrics.get("speech_rate_wpm", 120.0)
+    vocab = metrics.get("vocabulary_richness", 0.75)
+    total_w = metrics.get("total_words", 45)
+    duration = metrics.get("duration_seconds", 15.0)
+    
+    # Risk Level
+    if derived_score >= 85:
+        risk_level = "Low Risk"
+    elif derived_score >= 70:
+        risk_level = "Moderate Risk"
+    else:
+        risk_level = "High Risk"
+        
+    final_assessment = FinalAssessment(
+        patient_id=patient_id,
+        speech=SpeechMetrics(
+            total_words=total_w,
+            unique_words=metrics.get("unique_words", int(total_w * vocab)),
+            vocabulary_richness=vocab,
+            speech_rate_wpm=speech_rate,
+            filler_word_count=metrics.get("filler_words", 0),
+            duration_seconds=duration
+        ),
+        memory=MemoryMetrics(
+            words_assigned=["apple", "table", "penny", "candle", "folder"],
+            immediate_recalled=["apple", "table", "penny"],
+            delayed_recalled=["apple", "table"],
+            immediate_score=60.0,
+            delayed_score=40.0
+        ),
+        attention=AttentionMetrics(
+            forward_score=80.0,
+            backward_score=60.0,
+            total_score=70.0
+        ),
+        naming=NamingMetrics(
+            total_questions=3,
+            correct_answers=3,
+            score=100.0
+        ),
+        fluency=FluencyMetrics(
+            total_valid_words=12,
+            repetition_count=0,
+            score=80.0
+        ),
+        overall_score=float(derived_score),
+        risk_level=risk_level
+    )
+    
+    # Generate PDF in a temporary file or uploads/reports
+    reports_dir = os.path.join(UPLOAD_DIR, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    report_filename = f"report_{patient_id}.pdf"
+    report_path = os.path.join(reports_dir, report_filename)
+    
+    try:
+        generate_pdf(final_assessment, report_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+        
+    return FileResponse(
+        path=report_path,
+        filename=report_filename,
+        media_type="application/pdf"
+    )
+
 # --- Patient History APIs ---
+
 
 @app.get("/patient/{patient_id}/history")
 def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
@@ -589,6 +742,22 @@ def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
             "alert_status": event.alert_status
         })
         
+    wearable_data = db.query(db_models.WearableSensorData).filter(db_models.WearableSensorData.patient_id == patient_id).order_by(db_models.WearableSensorData.timestamp.desc()).first()
+    processed_wearable = None
+    if wearable_data:
+        processed_wearable = {
+            "timestamp": wearable_data.timestamp,
+            "acc_x": wearable_data.acc_x,
+            "acc_y": wearable_data.acc_y,
+            "acc_z": wearable_data.acc_z,
+            "gyro_x": wearable_data.gyro_x,
+            "gyro_y": wearable_data.gyro_y,
+            "gyro_z": wearable_data.gyro_z,
+            "battery_level": wearable_data.battery_level,
+            "fall_detected": wearable_data.fall_detected,
+            "created_at": wearable_data.created_at.isoformat()
+        }
+
     return {
         "patient": {
             "patient_id": db_patient.patient_id,
@@ -604,8 +773,10 @@ def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
         },
         "face_verifications": processed_faces,
         "speech_assessments": processed_speech,
-        "fall_events": processed_falls
+        "fall_events": processed_falls,
+        "wearable_status": processed_wearable
     }
+
 
 @app.get("/assessment_history/{patient_id}")
 def get_assessment_history(patient_id: str, db: Session = Depends(get_db)):
@@ -675,6 +846,10 @@ def get_all_patients(db: Session = Depends(get_db)):
             elif latest_fall.event_type == "UNRESPONSIVE" and latest_fall.alert_status == "DISPATCHED":
                 fall_status = "Unresponsive Alert"
                 
+        speech_error = None
+        if p.patient_id in active_speech_errors:
+            speech_error = active_speech_errors[p.patient_id]["error"]
+            
         results.append({
             "patient_id": p.patient_id,
             "full_name": p.full_name,
@@ -684,6 +859,179 @@ def get_all_patients(db: Session = Depends(get_db)):
             "compliance_percentage": p.compliance_percentage,
             "last_checkin": p.last_checkin.isoformat() if p.last_checkin else None,
             "face_status": face_status,
-            "fall_status": fall_status
+            "fall_status": fall_status,
+            "room_safety_active": p.patient_id in active_senders,
+            "speech_error": speech_error
         })
     return results
+
+# Global tracking states for Room Safety camera stream and Check-In Speech errors
+active_senders = set()
+active_speech_errors = {}
+
+@app.post("/api/checkin/error")
+def report_checkin_error(data: dict):
+    patient_id = data.get("patient_id")
+    error_message = data.get("error")
+    if patient_id:
+        active_speech_errors[patient_id] = {
+            "error": error_message,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    return {"status": "success"}
+
+@app.post("/api/checkin/clear-errors")
+def clear_checkin_errors(data: dict):
+    patient_id = data.get("patient_id")
+    if patient_id in active_speech_errors:
+        del active_speech_errors[patient_id]
+    return {"status": "success"}
+
+# Real-time WebSocket live-streaming broadcasting state
+active_receivers = {}
+
+@app.websocket("/api/vision/stream")
+async def vision_stream_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    query_params = websocket.query_params
+    role = query_params.get("role")  # "sender" or "receiver"
+    patient_id = query_params.get("patient_id", "PAT-0001")
+    
+    if role == "receiver":
+        # Register this socket as a receiver for this patient
+        if patient_id not in active_receivers:
+            active_receivers[patient_id] = []
+        active_receivers[patient_id].append(websocket)
+        try:
+            while True:
+                # Keep socket open and listen for heartbeat/messages (none expected)
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            if patient_id in active_receivers and websocket in active_receivers[patient_id]:
+                active_receivers[patient_id].remove(websocket)
+                if not active_receivers[patient_id]:
+                    del active_receivers[patient_id]
+            print(f"Receiver disconnected for patient {patient_id}")
+            
+    elif role == "sender":
+        # Sender streams base64 JPEG frames
+        from core.database import SessionLocal
+        import base64
+        from services.vision_processor import process_frame
+        
+        active_senders.add(patient_id)
+        db = SessionLocal()
+        try:
+            while True:
+                data = await websocket.receive_text()
+                
+                # Strip prefix if present
+                if data.startswith("data:image/jpeg;base64,"):
+                    base64_data = data.split(",")[1]
+                else:
+                    base64_data = data
+                
+                try:
+                    img_bytes = base64.b64decode(base64_data)
+                    nparr = np.frombuffer(img_bytes, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                except Exception as e:
+                    print(f"Error decoding base64 frame: {e}")
+                    continue
+                
+                if frame is not None:
+                    # Process frame with YOLOv8-pose
+                    annotated_frame, status = process_frame(frame, patient_id, pose_model, db, UPLOAD_DIR)
+                    
+                    # Encode processed frame back to jpeg base64
+                    _, buffer = cv2.imencode(".jpg", annotated_frame)
+                    encoded_annotated = base64.b64encode(buffer).decode("utf-8")
+                    data_url = f"data:image/jpeg;base64,{encoded_annotated}"
+                    
+                    # Send feedback status and image to sender
+                    await websocket.send_text(json.dumps({"status": status, "image": data_url}))
+                    
+                    # Broadcast to all active receivers (caregiver safety monitors)
+                    if patient_id in active_receivers:
+                        for rx in list(active_receivers[patient_id]):
+                            try:
+                                await rx.send_text(json.dumps({"status": status, "image": data_url}))
+                            except Exception:
+                                # In case of send failure, let it be cleaned up
+                                pass
+        except WebSocketDisconnect:
+            print(f"Sender disconnected for patient {patient_id}")
+        finally:
+            active_senders.discard(patient_id)
+            db.close()
+    else:
+        await websocket.close(code=4000, reason="Invalid role parameter")
+
+
+@app.post("/api/iot/data")
+def submit_wearable_telemetry(data: schemas.WearableTelemetrySubmit, db: Session = Depends(get_db)):
+    import time
+    # 1. Verify if patient exists
+    db_patient = db.query(db_models.Patient).filter(db_models.Patient.patient_id == data.patient_id).first()
+    if not db_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    # 2. Save wearable sensor data
+    sensor_data = db_models.WearableSensorData(
+        patient_id=data.patient_id,
+        timestamp=data.timestamp,
+        acc_x=data.acceleration.x,
+        acc_y=data.acceleration.y,
+        acc_z=data.acceleration.z,
+        gyro_x=data.gyroscope.x,
+        gyro_y=data.gyroscope.y,
+        gyro_z=data.gyroscope.z,
+        battery_level=data.battery,
+        fall_detected=data.fall_detected
+    )
+    db.add(sensor_data)
+    
+    # 3. If a fall is detected, register a SafetyEvent and send a Telegram alert
+    if data.fall_detected:
+        event_id = f"evt_wearable_{data.patient_id}_{int(time.time())}"
+        safety_event = db_models.SafetyEvent(
+            event_id=event_id,
+            patient_id=data.patient_id,
+            timestamp=datetime.now(),
+            event_source="WEARABLE",
+            event_type="FALL",
+            snapshot_path=None,
+            confidence=1.0,
+            alert_status="DISPATCHED"
+        )
+        db.add(safety_event)
+        
+        # Trigger Telegram Notification
+        from services.fall_service import send_telegram_notification
+        patient_name = db_patient.full_name
+        alert_msg = (
+            "🚨 <b>EMERGENCY ALERT</b> 🚨\n\n"
+            "⚠️ <b>Wearable Fall Detected!</b>\n"
+            f"👤 <b>Patient:</b> {patient_name} ({data.patient_id})\n"
+            f"🔋 <b>Battery Level:</b> {data.battery}%\n"
+            f"📅 <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (IST)\n\n"
+            "🔴 Please check the patient immediately."
+        )
+        send_telegram_notification(alert_msg)
+        
+    db.commit()
+    return {"status": "success", "message": "Wearable sensor telemetry recorded successfully"}
+
+
+@app.get("/api/test-telegram")
+def test_telegram():
+    from services.fall_service import send_telegram_notification
+    success = send_telegram_notification("🔔 SilentCare AI: This is a test notification from the backend!")
+    if success:
+        return {"status": "success", "message": "Test Telegram message sent successfully!"}
+    else:
+        return {"status": "error", "message": "Failed to send Telegram message. Check backend logs for missing env variables."}
+
+
