@@ -1,0 +1,10 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// --- Configuration ---
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+const char* api_url = "http://YOUR_BACKEND_IP:8000/api/iot/data"; // Or deployed URL
+const char* patient_id = "PAT-0001";
+
+#endif

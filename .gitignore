@@ -43,3 +43,7 @@ Thumbs.db
 backend/reports/
 backend/uploads/reports/
 
+# Hardware Firmware Configs
+wearable_firmware/FallDetection/config.h
+
+
