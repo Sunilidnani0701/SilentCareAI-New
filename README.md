@@ -93,10 +93,17 @@ graph TD
    ```bash
    pip install -r requirements.txt
    ```
-4. Start the backend:
+4. Configure environment variables:
+   Copy the `.env.example` template from the root directory to `.env` in the root (or `backend`) directory:
+   ```bash
+   cp ../.env.example ../.env
+   ```
+   Open the `.env` file and fill in your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` credentials.
+5. Start the backend:
    ```bash
    python -m uvicorn main_fastapi:app --host 0.0.0.0 --port 8000
    ```
+
 
 ### 3. Frontend Setup
 1. Navigate to the frontend directory:

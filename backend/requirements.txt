@@ -18,4 +18,4 @@ numpy
 opencv-python-headless
 ultralytics
 websockets
-
+python-dotenv

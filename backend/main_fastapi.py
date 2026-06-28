@@ -4,7 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env (checks backend/ and root directories)
+load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+
 import uuid
+
 import json
 from datetime import datetime
 import cv2
