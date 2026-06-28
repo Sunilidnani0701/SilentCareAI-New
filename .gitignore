@@ -37,3 +37,9 @@ temp_test.wav
 # OS files
 .DS_Store
 Thumbs.db
+
+# Reports and PDFs
+*.pdf
+backend/reports/
+backend/uploads/reports/
+
